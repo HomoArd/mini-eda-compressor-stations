@@ -1,0 +1,244 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# PROJECT: Analysis of Compressor Station Performance
+# Goal:
+# - analyze pressure, flow, and temperature indicators
+# - identify unusual observations
+# - compare stations, operating modes, and regions
+# - understand possible signs of unstable operation
+# =========================================
+# 1. CREATE DATA
+# Here we use a small educational dataset
+# =========================================
+
+df_measurements = pd.DataFrame({
+    "station_id": [301,301,301,301,301,302,302,302,302,302,303,303,303,303,303,304,304,304,304,304],
+    "date": pd.date_range("2025-04-01", periods=20, freq="D"),
+    "pressure": [52,54,53,70,55,48,47,49,50,46,61,60,59,62,58,51,52,50,49,80],
+    "flow": [120,125,123,165,128,138,140,137,136,133,128,130,127,135,126,115,117,116,114,170],
+    "temperature": [11,12,10,15,11,8,7,9,10,8,14,13,12,14,11,9,10,8,7,16]
+})
+
+df_info = pd.DataFrame({
+    "station_id": [301,302,303,304],
+    "mode": ["normal","repair","stress","normal"],
+    "region": ["north","south","north","east"],
+    "station_type": ["A","B","A","C"]
+})
+
+print("=== df_measurements: first rows ===")
+print(df_measurements.head(5), "\n")
+
+print("=== df_info: first rows ===")
+print(df_info.head(5), "\n")
+
+print("=== Shapes ===")
+print("df_info\n",df_info.shape)
+print("df_measurements\n",df_measurements.shape)
+
+print("=== Data types ===")
+print(df_info.dtypes)
+print(df_measurements.dtypes)
+
+print("=== Missing values ===")
+print(df_info.isna().sum())
+print(df_measurements.isna().sum())
+
+
+print("=== Descriptive statistics === ")
+print(df_measurements.describe())
+
+#First obviously
+#We have the df with temp,press,flow by date and station
+# 1) In this time we dont have any missin values
+# 2) In the df_measurements we have information about 4 station
+# 3) In the start we see high pressure values
+
+
+# ==================================================
+# 3. MERGE TABLES
+# Left join is used to keep all measurement rows
+# ==================================================
+
+df=pd.merge(df_measurements,df_info,on="station_id",how="left",indicator=True)
+print("===The base infromation about Data Frame===")
+print("shape\n",df.shape)
+print("Missing values \n",df.isna().sum())
+
+print("Mode counts:")
+print("By region\n",df["mode"].value_counts())
+print("By mode\n",df["region"].value_counts())
+
+# ==================================================
+# 4. FEATURE ENGINEERING
+# ==================================================
+
+def diff(df,parametr):
+    return df[parametr]-df[parametr].mean()
+ 
+
+df["pressure_diff"] = diff(df,"pressure")
+df["flow_diff"] = diff(df,"flow")
+df["is_high_pressure"] = df["pressure"]>60
+df["is_high_flow"] = df["flow"]>140
+df["flow_per_temp"] = df["flow"]/df["temperature"]
+df["status"] = "normal"
+df.loc[
+    (df["pressure"]>=55) & (df["pressure"]<=65),"status"
+] = "warning"
+df.loc[df["pressure"]>65,"status"] = "alert"
+
+print("=== New columns preview ===")
+print(df.head(5), "\n")
+
+
+# ==================================================
+# 5. AGGREGATIONS
+# ==================================================
+def mean_by(df,group,column):
+    return df.groupby(group)[column].mean()
+
+def max_by(df,group,column):
+    return df.groupby(group)[column].max()
+
+avg_press_by_station = mean_by(df,"station_id","pressure")
+avg_flow_by_station = mean_by(df,"station_id","flow")
+max_press_by_station = max_by(df,"station_id","pressure")
+avg_press_by_region = mean_by(df,"region","pressure")
+avg_flow_by_mode = mean_by(df,"mode","flow")
+print("=== Average pressure by station ===\n", avg_press_by_station)
+print("=== Average Flow by Station ===\n", avg_flow_by_station)
+print("=== Max pressure by station ===\n", max_press_by_station)
+print("=== Average Pressure by Region ===\n", avg_press_by_region)
+print("=== Average Flow by Mode ===\n", avg_flow_by_mode)
+print("=== Status record count ===\n",df["status"].value_counts())
+print("=== Top 5 rows with the highest presssure === \n",
+      df.sort_values("pressure",ascending=False).head(5)
+      )
+
+# ==================================================
+# 6. FILTERING
+# ==================================================
+
+
+df_pressure_60 = df.loc[df["pressure"] > 60]
+df_flow_140 = df.loc[df["flow"] > 140]
+df_stress = df.loc[df["mode"] == "stress"]
+df_north = df.loc[df["region"] == "north"]
+df_pressure_above_avg = df.loc[df["pressure_diff"] > 0]
+df_alert = df.loc[(df["pressure"] > 60) & (df["flow"] > 140)]
+
+print("Rows with pressure > 60:", df_pressure_60.shape[0])
+print("Rows with flow > 140:", df_flow_140.shape[0])
+print("Rows in stress mode:", df_stress.shape[0])
+print("Rows in north region:", df_north.shape[0])
+print("Rows with pressure above average:", df_pressure_above_avg.shape[0])
+print("Rows with pressure > 60 and flow > 140:", df_alert.shape[0], "\n")
+
+# ==================================================
+# 7. VISUALIZATION
+# ==================================================
+
+plt.figure(figsize=(8,6))
+plt.plot(df["date"],df["pressure"])
+plt.xlabel("Date")
+plt.ylabel("Pressure")
+plt.title("Pressure by Date")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+# Observation: On April 20, pressure reaches its maximum and looks anomalously high.
+
+plt.figure(figsize=(8,6))
+plt.plot(df["date"],df["flow"])
+plt.xlabel("Date")
+plt.ylabel("Flow")
+plt.xticks(rotation=45)
+plt.title("Flow by Date")
+plt.tight_layout
+plt.show()
+# Observation: On April 20, flow reaches its maximum and looks anomalously high.
+
+plt.figure(figsize=(6,4))
+plt.hist(df["pressure"],bins=7)
+plt.xlabel("Pressure")
+plt.ylabel("Count")
+plt.tight_layout()
+plt.title("Distribution Values of Pressure")
+plt.show()
+# Observation: Most pressure values are concentrated in the lower range, roughly around 45–55.
+
+plt.figure(figsize=(6,4))
+plt.hist(df["flow"],bins=7)
+plt.xlabel("Flow")
+plt.ylabel("Count")
+plt.tight_layout()
+plt.title("Distribution Values of Flow")
+plt.show()
+# Observation: Most flow values are concentrated roughly around 120–140.
+
+plt.figure(figsize=(6,4))
+plt.boxplot(df["pressure"])
+plt.ylabel("Pressure")
+plt.title("Pressure boxplot")
+plt.tight_layout()
+plt.show()
+# Observation: Pressure = 80 looks like a possible outlier.
+avg_press_by_station
+
+plt.figure(figsize=(8,6))
+plt.bar(avg_press_by_station.index,avg_press_by_station.values)
+plt.xlabel("Station")
+plt.ylabel("Average of Pressure")
+plt.title("Average Pressure by Station")
+plt.tight_layout()
+plt.show()
+# Observation: Station 303 has the highest average pressure.
+
+
+avg_flow_by_region=mean_by(df,"region","flow")
+plt.figure(figsize=(8,6))
+plt.bar(avg_flow_by_region.index,avg_flow_by_region.values)
+plt.xlabel("Region")
+plt.ylabel("Average of Flow")
+plt.title("Average FLow by Region")
+plt.tight_layout()
+plt.show()
+#Observation:The south region has the highest average flow
+
+plt.figure(figsize=(8,6))
+plt.scatter(df["flow"],df["pressure"])
+plt.xlabel("Flow")
+plt.ylabel("Pressure")
+plt.title("Relationship Between Flow and Pressure")
+plt.tight_layout()
+plt.show()
+# Observation:There appears to be a positive relationship between flow and pressure.
+
+# ==================================================
+# 8. KEY FINDINGS
+# ==================================================
+
+print("Key findings:")
+print("1. Station 303 has the highest average pressure.")
+print("2. Station 304 has the highest average flow.")
+print("3. The observation on April 20 looks anomalous because both pressure and flow spike sharply.")
+print("4. Stress mode may be associated with elevated pressure and less stable operation.")
+print("5. There appears to be a positive relationship between flow and pressure.")
+
+# ==================================================
+# 9. FINAL CONCLUSION
+# ==================================================
+
+print("=== Final conclusion ===")
+print(
+    "This mini-EDA project analyzed compressor station measurements using pressure, "
+    "flow, and temperature data. The analysis showed that station 303 has the highest "
+    "average pressure, while station 304 has the highest average flow due to an extreme "
+    "observation on April 20. The same date also contains the strongest anomaly in both "
+    "pressure and flow. In addition, stress mode may be linked to higher pressure and "
+    "less stable operation. Overall, simultaneous spikes in pressure and flow should be "
+    "monitored automatically and inspected first."
+)
