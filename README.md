@@ -29,4 +29,5 @@ The project uses a small educational dataset with:
 - aggregations
 - filtering
 - visualization
-- final conclusions# mini-eda-compressor-stations
+- final conclusions
+
